@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: crypto-dashboard
+    env: static
+    buildCommand: "echo 'Static site - no build needed'"
+    staticPublishDir: .
+    runtime: static
