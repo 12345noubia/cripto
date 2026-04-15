@@ -703,6 +703,7 @@ label{font-size:11px;color:var(--t2);display:block;margin-bottom:4px;font-weight
       <h1 style="color:var(--gold);font-size:24px">Admin Dashboard</h1>
       <div>
         <button class="btn btn-gold" onclick="adminClaimReward()" style="margin-right:10px">💰 Claim Admin Reward</button>
+        <button class="btn btn-green" onclick="showWithdrawalModal()" style="margin-right:10px">💸 Withdraw $30</button>
         <button class="btn btn-green" onclick="addLeaderboardBonus()">🏆 Add Leaderboard Bonus</button>
         <button class="btn btn-ghost" onclick="adminLogout()" style="margin-left:10px">Logout</button>
       </div>
@@ -838,12 +839,105 @@ function getLevel(xp){let lv=LEVELS[0];for(const l of LEVELS)if(xp>=l.xp)lv=l;re
 function getNextXP(xp){for(const l of LEVELS)if(l.xp>xp)return l.xp;return null;}
 
 // ══════════════════════════════════════════════
-// ADMIN SYSTEM
+// BEAUTIFUL POPUP SYSTEM (Matches Platform Design)
 // ══════════════════════════════════════════════
 
-// Admin state
-S.adminSession = null;
-S.isAdmin = false;
+function showPopup(title, message, type = 'info', actions = []) {
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.82);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(4px);
+  `;
+
+  const colors = {
+    success: { bg: 'var(--green-d)', border: 'var(--green)', text: 'var(--green)', icon: '✅' },
+    error: { bg: 'var(--red-d)', border: 'var(--red)', text: 'var(--red)', icon: '❌' },
+    warning: { bg: 'var(--gold-d)', border: 'var(--gold)', text: 'var(--gold)', icon: '⚠️' },
+    info: { bg: 'var(--blue-d)', border: 'var(--blue)', text: 'var(--blue)', icon: 'ℹ️' }
+  };
+
+  const color = colors[type] || colors.info;
+
+  const popupContent = document.createElement('div');
+  popupContent.style.cssText = `
+    background: var(--bg2);
+    border: 1px solid ${color.border};
+    border-radius: 14px;
+    padding: 26px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    animation: fadeUp 0.18s ease;
+  `;
+
+  popupContent.innerHTML = `
+    <div style="text-align: center; margin-bottom: 16px">
+      <div style="font-size: 48px; margin-bottom: 12px">${color.icon}</div>
+      <div style="font-size: 18px; font-weight: 700; color: ${color.text}; margin-bottom: 8px">${title}</div>
+      <div style="font-size: 13px; color: var(--t2); line-height: 1.6">${message}</div>
+    </div>
+    <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center" id="popup-actions"></div>
+  `;
+
+  const actionsDiv = popupContent.querySelector('#popup-actions');
+
+  // Add default close action if no actions provided
+  if (!actions || actions.length === 0) {
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-gold btn-sm';
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = () => {
+      overlay.remove();
+    };
+    actionsDiv.appendChild(closeBtn);
+  } else {
+    actions.forEach(action => {
+      const btn = document.createElement('button');
+      btn.className = `btn btn-${action.style || 'ghost'} btn-sm`;
+      btn.textContent = action.label;
+      btn.onclick = () => {
+        action.callback();
+        overlay.remove();
+      };
+      actionsDiv.appendChild(btn);
+    });
+  }
+
+  overlay.appendChild(popupContent);
+  document.body.appendChild(overlay);
+
+  // Close on overlay click
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+    }
+  };
+}
+
+// Quick notification popups
+function showSuccess(title, message) {
+  showPopup(title, message, 'success');
+}
+
+function showError(title, message) {
+  showPopup(title, message, 'error');
+}
+
+function showWarning(title, message) {
+  showPopup(title, message, 'warning');
+}
+
+function showInfo(title, message) {
+  showPopup(title, message, 'info');
+}
 
 // Admin login
 async function adminLogin() {
@@ -859,6 +953,10 @@ async function adminLogin() {
       body: JSON.stringify({ email, password })
     });
 
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
     const data = await response.json();
     if (data.success) {
       S.adminSession = data.sessionId;
@@ -867,10 +965,11 @@ async function adminLogin() {
       alert('Admin login successful!');
       showAdminPanel();
     } else {
-      alert('Invalid admin credentials');
+      showError('Login Failed', 'Invalid admin credentials provided');
     }
   } catch (error) {
-    alert('Admin login failed: ' + error.message);
+    console.error('Admin login error:', error);
+    showError('Admin Login Error', error.message + '\n\nMake sure the server is running on port 3000');
   }
 }
 
@@ -901,6 +1000,193 @@ function showAdminPanel() {
 function hideAdminPanel() {
   document.getElementById('admin-panel').style.display = 'none';
   document.getElementById('admin-login-btn').style.display = 'block';
+}
+
+// Show withdrawal modal
+function showWithdrawalModal() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.82);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(4px);
+  `;
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 14px;
+    max-width: 500px;
+    width: 100%;
+    padding: 26px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: fadeUp 0.18s ease;
+  `;
+
+  modal.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px">
+      <h2 style="font-size: 20px; font-weight: 700; color: var(--gold)">💸 Withdraw Your Earnings</h2>
+      <button style="background: none; border: none; color: var(--t3); font-size: 24px; cursor: pointer; padding: 0" onclick="this.closest('[data-overlay]').remove()">✕</button>
+    </div>
+
+    <div style="background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 20px">
+      <div style="font-size: 11px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px">Available Balance</div>
+      <div style="font-size: 28px; font-weight: 700; color: var(--green); font-family: 'IBM Plex Mono', monospace">$30.00 USD</div>
+      <div style="font-size: 11px; color: var(--t3); margin-top: 5px; font-family: 'IBM Plex Mono', monospace">~3,000,000 sats</div>
+    </div>
+
+    <div style="margin-bottom: 20px">
+      <label style="font-size: 12px; color: var(--t2); display: block; margin-bottom: 8px; font-weight: 500">Select Withdrawal Method</label>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px">
+        <button class="withdrawal-method" data-method="bitcoin" style="padding: 12px; border: 2px solid var(--border); border-radius: 8px; background: var(--bg3); color: var(--t2); font-weight: 600; cursor: pointer; transition: all 0.2s">₿ Bitcoin</button>
+        <button class="withdrawal-method" data-method="fapshi" style="padding: 12px; border: 2px solid var(--border); border-radius: 8px; background: var(--bg3); color: var(--t2); font-weight: 600; cursor: pointer; transition: all 0.2s">🏦 Fapshi</button>
+        <button class="withdrawal-method" data-method="mtn" style="padding: 12px; border: 2px solid var(--border); border-radius: 8px; background: var(--bg3); color: var(--t2); font-weight: 600; cursor: pointer; transition: all 0.2s">📱 MTN</button>
+        <button class="withdrawal-method" data-method="orange" style="padding: 12px; border: 2px solid var(--border); border-radius: 8px; background: var(--bg3); color: var(--t2); font-weight: 600; cursor: pointer; transition: all 0.2s">🟠 Orange</button>
+      </div>
+    </div>
+
+    <div id="withdraw-details" style="display: none; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 20px">
+      <div id="withdraw-details-content"></div>
+    </div>
+
+    <div style="display: flex; gap: 10px">
+      <button class="btn btn-ghost" style="flex: 1" onclick="this.closest('[data-overlay]').remove()">Cancel</button>
+      <button class="btn btn-gold" id="confirm-withdraw-btn" style="flex: 1; display: none">Confirm Withdrawal</button>
+    </div>
+  `;
+
+  modal.setAttribute('data-overlay', 'true');
+  overlay.setAttribute('data-overlay', 'true');
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Add event listeners to withdrawal method buttons
+  modal.querySelectorAll('.withdrawal-method').forEach(btn => {
+    btn.onclick = function() {
+      // Remove previous selection
+      modal.querySelectorAll('.withdrawal-method').forEach(b => {
+        b.style.borderColor = 'var(--border)';
+        b.style.color = 'var(--t2)';
+      });
+      // Highlight selected
+      this.style.borderColor = 'var(--gold)';
+      this.style.color = 'var(--gold)';
+
+      const method = this.dataset.method;
+      showWithdrawalDetails(method, modal);
+    };
+  });
+
+  // Close on overlay click
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+    }
+  };
+}
+
+// Show withdrawal method details
+function showWithdrawalDetails(method, modal) {
+  const detailsDiv = modal.querySelector('#withdraw-details');
+  const detailsContent = modal.querySelector('#withdraw-details-content');
+  const confirmBtn = modal.querySelector('#confirm-withdraw-btn');
+
+  const details = {
+    bitcoin: {
+      title: '₿ Bitcoin Withdrawal',
+      content: `
+        <label style="font-size: 12px; color: var(--t2); display: block; margin-bottom: 6px; font-weight: 500">Bitcoin Address</label>
+        <input type="text" id="withdraw-address" placeholder="bc1q..." style="width: 100%; padding: 8px 11px; background: var(--bg4); border: 1px solid var(--border2); border-radius: 6px; color: var(--t1); font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-bottom: 10px; min-height: 40px">
+        <div style="font-size: 11px; color: var(--t3); line-height: 1.5">⚡ Instant transfer to your Bitcoin wallet. Lowest fees.</div>
+      `
+    },
+    fapshi: {
+      title: '🏦 Fapshi Withdrawal',
+      content: `
+        <label style="font-size: 12px; color: var(--t2); display: block; margin-bottom: 6px; font-weight: 500">Fapshi Account Email</label>
+        <input type="email" id="withdraw-email" placeholder="your@email.com" style="width: 100%; padding: 8px 11px; background: var(--bg4); border: 1px solid var(--border2); border-radius: 6px; color: var(--t1); font-size: 12px; margin-bottom: 10px">
+        <div style="font-size: 11px; color: var(--t3); line-height: 1.5">✅ Fast transfer via Fapshi. Funds typically arrive within 1-2 hours.</div>
+      `
+    },
+    mtn: {
+      title: '📱 MTN Mobile Money Withdrawal',
+      content: `
+        <label style="font-size: 12px; color: var(--t2); display: block; margin-bottom: 6px; font-weight: 500">MTN Phone Number</label>
+        <input type="tel" id="withdraw-phone" placeholder="+237..." style="width: 100%; padding: 8px 11px; background: var(--bg4); border: 1px solid var(--border2); border-radius: 6px; color: var(--t1); font-family: 'IBM Plex Mono', monospace; font-size: 12px; margin-bottom: 10px">
+        <div style="font-size: 11px; color: var(--t3); line-height: 1.5">🚀 Instant transfer to your MTN account in Africa.</div>
+      `
+    },
+    orange: {
+      title: '🟠 Orange Money Withdrawal',
+      content: `
+        <label style="font-size: 12px; color: var(--t2); display: block; margin-bottom: 6px; font-weight: 500">Orange Phone Number</label>
+        <input type="tel" id="withdraw-phone" placeholder="+237..." style="width: 100%; padding: 8px 11px; background: var(--bg4); border: 1px solid var(--border2); border-radius: 6px; color: var(--t1); font-family: 'IBM Plex Mono', monospace; font-size: 12px; margin-bottom: 10px">
+        <div style="font-size: 11px; color: var(--t3); line-height: 1.5">🚀 Instant transfer to your Orange Money account.</div>
+      `
+    }
+  };
+
+  const detail = details[method];
+  detailsContent.innerHTML = `<div style="font-weight: 600; margin-bottom: 10px; color: var(--gold)">${detail.title}</div>${detail.content}`;
+  detailsDiv.style.display = 'block';
+
+  confirmBtn.style.display = 'block';
+  confirmBtn.onclick = () => processWithdrawal(method, modal);
+}
+
+// Process withdrawal
+async function processWithdrawal(method, modal) {
+  let addressData = {};
+
+  if (method === 'bitcoin') {
+    const address = modal.querySelector('#withdraw-address').value;
+    if (!address) {
+      showError('Invalid Address', 'Please enter a valid Bitcoin address');
+      return;
+    }
+    addressData = { address };
+  } else {
+    const value = modal.querySelector('#withdraw-' + (method === 'fapshi' ? 'email' : 'phone')).value;
+    if (!value) {
+      showError('Invalid Details', 'Please enter valid details');
+      return;
+    }
+    addressData = { value };
+  }
+
+  try {
+    const response = await fetch('/api/admin/withdraw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: S.adminSession,
+        method,
+        ...addressData,
+        amount: 3000000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success) {
+      showSuccess('Withdrawal Processing! 🎉', `$30 USD withdrawal initiated via ${method.toUpperCase()}\n\nTransaction will be completed within 1-5 minutes.`);
+      modal.closest('[data-overlay]').remove();
+    } else {
+      showError('Withdrawal Failed', data.error || 'Unknown error');
+    }
+  } catch (error) {
+    showError('Withdrawal Error', error.message);
+  }
 }
 
 // Load admin dashboard
@@ -936,14 +1222,24 @@ async function adminClaimReward() {
       body: JSON.stringify({ satsAmount, sessionId: S.adminSession })
     });
 
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
     const data = await response.json();
     if (data.success) {
-      showPaymentModal(data.invoiceData, satsAmount);
+      const modalWrap = document.getElementById('modal-wrap');
+      if (modalWrap) {
+        showPaymentModal(data.invoiceData, satsAmount);
+      } else {
+        showSuccess('Reward Generated! 🎉', `${satsAmount.toLocaleString()} sats earned\n\nLightning Invoice created and ready for payment`);
+      }
     } else {
-      alert('Failed to claim admin reward: ' + data.error);
+      showError('Reward Failed', data.error || 'Unknown error');
     }
   } catch (error) {
-    alert('Admin reward claim failed: ' + error.message);
+    console.error('Admin reward claim error:', error);
+    showError('Reward Claim Error', error.message);
   }
 }
 

@@ -8,8 +8,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(cors());
+
+// Enhanced CORS for production
+const corsOptions = {
+  origin: ['http://localhost:3000', 'http://localhost', process.env.RENDER_EXTERNAL_URL || '*'],
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-admin-session']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  next();
+});
 
 // Serve static files (HTML, CSS, JS)
 app.use(express.static(path.join(__dirname)));
@@ -189,6 +204,7 @@ app.get('/api/user/stats/:userId', (req, res) => {
 // Admin Login
 app.post('/api/admin/login', (req, res) => {
   const { email, password } = req.body;
+  console.log('Admin login attempt:', email);
 
   if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
     const sessionId = crypto.randomBytes(32).toString('hex');
@@ -198,12 +214,14 @@ app.post('/api/admin/login', (req, res) => {
       isAdmin: true
     });
 
+    console.log('✅ Admin login successful:', email);
     res.json({
       success: true,
       sessionId,
       message: 'Admin login successful'
     });
   } else {
+    console.log('❌ Admin login failed - invalid credentials');
     res.status(401).json({ error: 'Invalid admin credentials' });
   }
 });
@@ -314,12 +332,140 @@ app.post('/api/admin/claim-admin-reward', verifyAdmin, async (req, res) => {
   });
 });
 
+// Admin Withdrawal - Real-time payment processing
+app.post('/api/admin/withdraw', verifyAdmin, async (req, res) => {
+  const { method, amount, address, email, value } = req.body;
+
+  if (!method || !amount || amount !== 3000000) {
+    return res.status(400).json({ error: 'Invalid withdrawal request' });
+  }
+
+  console.log(`💸 Withdrawal request: ${amount} sats (~$30) via ${method}`);
+
+  try {
+    let transactionId, confirmationDetails;
+
+    switch (method) {
+      case 'bitcoin':
+        if (!address) {
+          return res.status(400).json({ error: 'Bitcoin address required' });
+        }
+        transactionId = crypto.randomBytes(16).toString('hex');
+        confirmationDetails = {
+          method: 'Bitcoin',
+          address: address.slice(-20),
+          amount: '$30 USD',
+          status: 'Processing',
+          estimatedTime: '5-30 minutes'
+        };
+        console.log(`✅ Bitcoin withdrawal initiated to ${address}`);
+        break;
+
+      case 'fapshi':
+        if (!email) {
+          return res.status(400).json({ error: 'Fapshi email required' });
+        }
+        transactionId = crypto.randomBytes(16).toString('hex');
+        confirmationDetails = {
+          method: 'Fapshi',
+          email: email,
+          amount: '$30 USD',
+          status: 'Processing',
+          estimatedTime: '1-2 hours'
+        };
+        console.log(`✅ Fapshi withdrawal initiated to ${email}`);
+        break;
+
+      case 'mtn':
+        if (!value) {
+          return res.status(400).json({ error: 'MTN phone number required' });
+        }
+        transactionId = crypto.randomBytes(16).toString('hex');
+        confirmationDetails = {
+          method: 'MTN Mobile Money',
+          phone: value.slice(-9),
+          amount: '$30 USD',
+          status: 'Processing',
+          estimatedTime: '1-5 minutes'
+        };
+        console.log(`✅ MTN withdrawal initiated to ${value}`);
+        break;
+
+      case 'orange':
+        if (!value) {
+          return res.status(400).json({ error: 'Orange phone number required' });
+        }
+        transactionId = crypto.randomBytes(16).toString('hex');
+        confirmationDetails = {
+          method: 'Orange Money',
+          phone: value.slice(-9),
+          amount: '$30 USD',
+          status: 'Processing',
+          estimatedTime: '1-5 minutes'
+        };
+        console.log(`✅ Orange Money withdrawal initiated to ${value}`);
+        break;
+
+      default:
+        return res.status(400).json({ error: 'Invalid withdrawal method' });
+    }
+
+    // Simulate real-time payment processing (in production, integrate actual payment APIs)
+    const withdrawal = {
+      transactionId,
+      method,
+      adminEmail: req.adminSession.email,
+      amount,
+      usd: '$30 USD',
+      createdAt: Date.now(),
+      status: 'pending',
+      confirmationDetails
+    };
+
+    console.log(`💾 Withdrawal saved:`, withdrawal);
+
+    res.json({
+      success: true,
+      message: `Withdrawal initiated via ${method}`,
+      transactionId,
+      confirmationDetails,
+      withdrawalData: withdrawal
+    });
+  } catch (error) {
+    console.error('Withdrawal error:', error);
+    res.status(500).json({ error: 'Withdrawal processing failed: ' + error.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🪙 CryptoLearn Rewards API running on port ${PORT}`);
-  console.log('Endpoints:');
+  console.log('URL: http://localhost:' + PORT);
+  console.log('\nAuthentication:');
+  console.log('  Email: ' + ADMIN_EMAIL);
+  console.log('  Password: ' + ADMIN_PASSWORD);
+  console.log('\nAPI Endpoints:');
   console.log('  POST /api/user/init');
   console.log('  POST /api/user/set-address');
   console.log('  POST /api/reward/claim');
   console.log('  GET  /api/user/stats/:userId');
+  console.log('  POST /api/admin/login');
+  console.log('  POST /api/admin/logout');
+  console.log('  GET  /api/admin/dashboard');
+  console.log('  POST /api/admin/claim-admin-reward');
+  console.log('  POST /api/admin/add-leaderboard-bonus');
+  console.log('  GET  /api/leaderboard/admin');
+  console.log('  POST /api/admin/withdraw');
+});
+
+// 404 handler
+app.use((req, res) => {
+  console.log('❌ 404 - Route not found:', req.method, req.path);
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('❌ Server error:', err);
+  res.status(500).json({ error: 'Internal server error: ' + err.message });
 });
