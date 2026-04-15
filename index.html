@@ -1164,9 +1164,11 @@ async function processWithdrawal(method, modal) {
   try {
     const response = await fetch('/api/admin/withdraw', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-session': S.adminSession
+      },
       body: JSON.stringify({
-        sessionId: S.adminSession,
         method,
         ...addressData,
         amount: 3000000
